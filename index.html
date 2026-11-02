@@ -334,7 +334,7 @@ const ic = (n, c = 'w-4 h-4') => `<svg class="${c}" viewBox="0 0 24 24" fill="no
 const S = {
   ds: null, wb: null, fileName: '', pending: null,
   map: {}, dims: [], dimLabels: [], rows: [], has: {},
-  fYear: 'all', fDims: {}, currency: '฿', hm: 'profit', gran: 'm', charts: {}, skipped: 0,
+  fYear: 'all', fMonth: 'all', fDims: {}, currency: '฿', hm: 'profit', gran: 'm', charts: {}, skipped: 0,
   dq: { mis: 0, zeroP: 0, n: 0 }, q: '', pg: 0, sort: null
 };
 
@@ -487,7 +487,7 @@ function applyMapping() {
   S.has = { profit: !!(M.profit || M.cogs), cogs: !!(M.cogs || M.profit), units: !!M.units, discount: !!M.discount, gross: !!(M.gross || M.discount), date: S.rows.some(r => r.ym) };
 }
 function applyDataset(map, dims) {
-  S.map = map; S.dims = dims.slice(0, 5); S.dimLabels = S.dims.map(lbl); S.fYear = 'all'; S.fDims = {}; S.q = ''; S.pg = 0; S.sort = null;
+  S.map = map; S.dims = dims.slice(0, 5); S.dimLabels = S.dims.map(lbl); S.fYear = 'all'; S.fMonth = 'all'; S.fDims = {}; S.q = ''; S.pg = 0; S.sort = null;
   applyMapping();
   if (!S.rows.length) { toast('ไม่พบข้อมูลตัวเลขในคอลัมน์ยอดขายที่เลือก', 'bad'); return false; }
   const mg = monthly(S.rows), filled = mg.filter(x => x.n).length;
@@ -499,7 +499,7 @@ function applyDataset(map, dims) {
 }
 
 /* ---------- aggregate ---------- */
-const filtered = (ignoreYear = false) => S.rows.filter(r => (ignoreYear || S.fYear === 'all' || r.y === S.fYear) && S.dims.every((_, i) => S.fDims[i] == null || r.d[i] === S.fDims[i]));
+const filtered = (ignoreYear = false) => S.rows.filter(r => (ignoreYear || S.fYear === 'all' || r.y === S.fYear) && (S.fMonth === 'all' || r.m === S.fMonth) && S.dims.every((_, i) => S.fDims[i] == null || r.d[i] === S.fDims[i]));
 const blank = k => ({ k, sales: 0, profit: 0, cogs: 0, units: 0, discount: 0, gross: 0, n: 0, margin: 0, avg: 0, cust: 0, cs: new Set() });
 const fin = a => { a.margin = a.sales ? a.profit / a.sales : 0; a.avg = a.n ? a.sales / a.n : 0; a.cust = a.cs.size; return a; };
 function add(a, r) { a.sales += r.sales; a.profit += r.profit; a.cogs += r.cogs; a.units += r.units; a.discount += r.discount; a.gross += r.gross; a.n++; if (r.d.length > 4) a.cs.add(r.d[4]); }
@@ -864,7 +864,7 @@ function renderInsights(F) {
 function updateHero(F) {
   const p = period(F), ds = S.ds;
   $('#srcInfo').textContent = `${ds.file}${ds.sheet ? ' · ' + ds.sheet : ''} · ${S.rows.length.toLocaleString()} แถว${S.skipped ? ` (ข้าม ${S.skipped})` : ''}`;
-  $('#heroSub').innerHTML = `${p ? `ช่วงข้อมูล <b>${ymLabel(p.a, true)} – ${ymLabel(p.b, true)}</b> · ` : ''}${F.length.toLocaleString()} รายการตามตัวกรอง${S.fYear !== 'all' ? ` · ปี พ.ศ. ${S.fYear + 543}` : ''}`;
+  $('#heroSub').innerHTML = `${p ? `ช่วงข้อมูล <b>${ymLabel(p.a, true)} – ${ymLabel(p.b, true)}</b> · ` : ''}${F.length.toLocaleString()} รายการตามตัวกรอง${S.fYear !== 'all' ? ` · ปี ${S.fYear + 543}` : ''}${S.fMonth !== 'all' ? ` · เดือน${TH_MF[S.fMonth - 1]}` : ''}`;
 }
 function render() {
   if (typeof Chart === 'undefined') return;
@@ -885,7 +885,9 @@ function render() {
 }
 function buildFilterUI() {
   const years = [...new Set(S.rows.map(r => r.y).filter(Boolean))].sort((a, b) => a - b);
-  $('#yearChips').innerHTML = years.length ? `<span class="text-xs text-muted mr-1">ปี</span>` + ['all', ...years].map(y => `<button class="chip ${S.fYear === y ? 'on' : ''}" data-y="${y}">${y === 'all' ? 'ทั้งหมด' : 'พ.ศ. ' + (y + 543)}</button>`).join('') : '';
+  const months = [...new Set(S.rows.map(r => r.m).filter(Boolean))].sort((a, b) => a - b);
+  $('#yearChips').innerHTML = (years.length ? `<span class="text-xs text-muted mr-1">ปี</span>` + ['all', ...years].map(y => `<button class="chip ${S.fYear === y ? 'on' : ''}" data-y="${y}">${y === 'all' ? 'ทั้งหมด' : y + 543}</button>`).join('') : '')
+    + (months.length ? `<select class="sel ml-1" id="monthSel" title="กรองเดือน"><option value="all">เดือน: ทั้งหมด</option>${months.map(m => `<option value="${m}" ${S.fMonth === m ? 'selected' : ''}>${TH_MF[m - 1]}</option>`).join('')}</select>` : '');
   $('#dimFilters').innerHTML = S.dims.map((d, i) => {
     const vals = [...new Set(S.rows.map(r => r.d[i]))].sort((a, b) => a.localeCompare(b)).slice(0, 300);
     return `<select class="sel" data-fd="${i}" title="${esc(d)}"><option value="">${esc(S.dimLabels[i])}: ทั้งหมด</option>${vals.map(v => `<option value="${esc(v)}" ${S.fDims[i] === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select>`;
@@ -1068,7 +1070,7 @@ function setTheme(dark) {
   $('#btnPrint').onclick = () => window.print();
   $('#btnPresent').onclick = openPresent;
   $('#btnTheme').onclick = () => setTheme(!document.documentElement.classList.contains('dark'));
-  $('#btnReset').onclick = () => { S.fYear = 'all'; S.fDims = {}; S.q = ''; S.pg = 0; $('#q').value = ''; buildFilterUI(); render(); };
+  $('#btnReset').onclick = () => { S.fYear = 'all'; S.fMonth = 'all'; S.fDims = {}; S.q = ''; S.pg = 0; $('#q').value = ''; buildFilterUI(); render(); };
   $('#cur').value = S.currency; $('#cur').onchange = e => { S.currency = e.target.value; render(); };
   $('#grSeg').onclick = e => { const b = e.target.closest('[data-gr]'); if (!b || !S.rows.length) return; S.gran = b.dataset.gr; $$('#grSeg button').forEach(x => x.classList.toggle('on', x === b)); render(); };
   let qT = null; $('#q').oninput = e => { clearTimeout(qT); qT = setTimeout(() => { S.q = e.target.value; S.pg = 0; renderDetail(filtered()); }, 200); };
@@ -1076,6 +1078,7 @@ function setTheme(dark) {
   $('#pager').onclick = e => { const b = e.target.closest('[data-pg]'); if (!b || b.disabled) return; S.pg += +b.dataset.pg; renderDetail(filtered()); };
   $('#mapApply').onclick = applyMapModal;
   $('#yearChips').onclick = e => { const b = e.target.closest('[data-y]'); if (!b) return; S.fYear = b.dataset.y === 'all' ? 'all' : +b.dataset.y; S.pg = 0; $$('#yearChips .chip').forEach(c => c.classList.toggle('on', c === b)); render(); };
+  $('#yearChips').onchange = e => { if (e.target.id !== 'monthSel') return; S.fMonth = e.target.value === 'all' ? 'all' : +e.target.value; S.pg = 0; render(); };
   $('#dimFilters').onchange = e => { const s = e.target.closest('[data-fd]'); if (!s) return; S.fDims[+s.dataset.fd] = s.value === '' ? null : s.value; S.pg = 0; render(); };
   $('#hmSeg').onclick = e => { const b = e.target.closest('[data-hm]'); if (!b) return; S.hm = b.dataset.hm; $$('#hmSeg button').forEach(x => x.classList.toggle('on', x === b)); $('#heat').innerHTML = heatHTML(filtered(), S.hm); };
 
